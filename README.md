@@ -200,13 +200,68 @@ If you skipped this during setup and want to enable it later, add the setting ma
 
 ---
 
+## 🌐 Remote Agent Setup (Multi-Machine)
+
+Monitor Claude Code sessions across **multiple remote machines** using the agent mode.
+
+### Architecture
+
+```
+Aggregator Machine (MacBook Air)    Remote Machines (Mac Mini, etc.)
+┌─────────────────────────┐         ┌──────────────────────────┐
+│  ccm serve -p 3460      │◄────────┤  ccm agent --server ...  │
+│  (Web Dashboard)        │ Tailscale│  (Monitors local sessions)
+└─────────────────────────┘         └──────────────────────────┘
+```
+
+### Quick Start
+
+**On Aggregator (MacBook Air):**
+```bash
+ccm serve -p 3460 -t
+```
+
+**On Remote Machine (Mac Mini):**
+```bash
+# Using the setup script
+bash scripts/setup-remote.sh "Mac Mini"
+```
+
+### Tailscale Configuration
+
+When using multiple machines over Tailscale, mDNS (`.local`) hostnames may not resolve correctly. Use Tailscale IP addresses instead.
+
+📖 **See [docs/TAILSCALE_SETUP.md](./docs/TAILSCALE_SETUP.md) for complete setup guide**, including:
+- Finding your Tailscale IP addresses
+- Configuring hooks with correct paths
+- Troubleshooting connection issues
+- Security considerations
+
+**Quick fix for connection errors:**
+1. Get aggregator Tailscale IP: `tailscale ip -4`
+2. Update `scripts/setup-remote.sh` with the IP
+3. Fix hooks paths in `~/.claude/settings.json` (replace `/Users/OLD_USERNAME/` with your actual username)
+
+---
+
 ## 🔧 Troubleshooting
 
 ### Sessions not showing
 
 1. Run `ccm setup` to verify hook configuration
 2. Check `~/.claude/settings.json` for hook settings
-3. Restart Claude Code
+3. **Verify hook paths use correct username** - `/Users/YOUR_USERNAME/claude-code-monitor-multi/...`
+4. Check if `~/.claude-monitor/sessions.json` exists
+5. Restart Claude Code
+
+### Agent can't connect (Remote setup)
+
+**Symptom:** `Agent WebSocket error: getaddrinfo ENOTFOUND`
+
+**Solution:**
+1. Use Tailscale IP instead of `.local` hostname
+2. Check aggregator is running: `lsof -i :3460`
+3. See [docs/TAILSCALE_SETUP.md](./docs/TAILSCALE_SETUP.md) for details
 
 ### Focus not working
 
