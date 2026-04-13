@@ -28,10 +28,29 @@ export interface Session {
   created_at: string;
   updated_at: string;
   lastMessage?: string;
+  /** Machine identifier for multi-machine aggregation */
+  machine_id?: string;
 }
 
 // File store data structure
 export interface StoreData {
   sessions: Record<string, Session>;
+  updated_at: string;
+}
+
+// Aggregator: data received from a remote agent
+export interface AgentUpdate {
+  machine_id: string;
+  machine_name?: string;
+  sessions: Session[];
+}
+
+// Aggregator: merged store keyed by machine_id
+export interface AggregatorStore {
+  machines: Record<string, {
+    machine_name?: string;
+    sessions: Session[];
+    last_seen: string;
+  }>;
   updated_at: string;
 }

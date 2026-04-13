@@ -1,4 +1,13 @@
 // Types
+export type {
+  AgentUpdate,
+  AggregatorStore,
+  HookEvent,
+  HookEventName,
+  Session,
+  SessionStatus,
+  StoreData,
+} from './types/index.js';
 
 // Store functions
 export {
@@ -7,14 +16,12 @@ export {
   getSessions,
   getStorePath,
 } from './store/file-store.js';
-export type {
-  HookEvent,
-  HookEventName,
-  Session,
-  SessionStatus,
-  StoreData,
-} from './types/index.js';
+
+// Aggregator
+export { startAggregator } from './aggregator/server.js';
+export { startAgentClient } from './aggregator/agent-client.js';
+
+// Utilities
 export { focusSession, getSupportedTerminals, isMacOS } from './utils/focus.js';
 export { sendTextToTerminal } from './utils/send-text.js';
-// Utilities
 export { getStatusDisplay } from './utils/status.js';

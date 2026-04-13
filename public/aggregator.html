@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code Monitor - Multi-Machine Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-card: #141414;
+      --bg-card-hover: #1a1a1a;
+      --bg-machine: #111;
+      --border-subtle: #2a2a2a;
+      --border-default: #3a3a3a;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a8a8a8;
+      --text-muted: #666;
+      --status-running: #22c55e;
+      --status-running-bg: rgba(34, 197, 94, 0.15);
+      --status-waiting: #f59e0b;
+      --status-waiting-bg: rgba(245, 158, 11, 0.15);
+      --status-stopped: #71717a;
+      --status-stopped-bg: rgba(113, 113, 122, 0.1);
+      --accent: #6366f1;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      margin-bottom: 20px;
+    }
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .header .stats {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+    }
+    .stat { display: flex; align-items: center; gap: 6px; }
+    .stat-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .stat-dot.running { background: var(--status-running); }
+    .stat-dot.waiting { background: var(--status-waiting); }
+    .stat-dot.stopped { background: var(--status-stopped); }
+    .stat-dot.machine { background: var(--accent); }
+
+    .machines-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 16px;
+    }
+    .machine-card {
+      background: var(--bg-machine);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .machine-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .machine-name {
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .machine-name .icon {
+      font-size: 16px;
+    }
+    .machine-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .machine-sessions {
+      padding: 8px;
+    }
+    .session-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      transition: background 0.15s;
+    }
+    .session-card:hover {
+      background: var(--bg-card-hover);
+    }
+    .session-status {
+      width: 10px; height: 10px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .session-status.running {
+      background: var(--status-running);
+      box-shadow: 0 0 6px var(--status-running);
+    }
+    .session-status.waiting_input {
+      background: var(--status-waiting);
+      box-shadow: 0 0 6px var(--status-waiting);
+    }
+    .session-status.stopped {
+      background: var(--status-stopped);
+    }
+    .session-info { flex: 1; min-width: 0; }
+    .session-cwd {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .session-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .session-status-label {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .session-status-label.running {
+      background: var(--status-running-bg);
+      color: var(--status-running);
+    }
+    .session-status-label.waiting_input {
+      background: var(--status-waiting-bg);
+      color: var(--status-waiting);
+    }
+    .session-status-label.stopped {
+      background: var(--status-stopped-bg);
+      color: var(--status-stopped);
+    }
+    .session-message {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .no-sessions {
+      padding: 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+      color: var(--text-muted);
+      gap: 12px;
+    }
+    .empty-state .icon { font-size: 48px; opacity: 0.5; }
+    .empty-state p { font-size: 14px; }
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .connection-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+    .connection-dot.connected { background: var(--status-running); }
+    .connection-dot.disconnected { background: #ef4444; }
+    .last-update {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .session-status.running {
+      animation: pulse 2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Claude Code Monitor</h1>
+    <div class="stats" id="stats">
+      <div class="stat"><span class="stat-dot machine"></span><span id="machine-count">0</span> machines</div>
+      <div class="stat"><span class="stat-dot running"></span><span id="running-count">0</span> running</div>
+      <div class="stat"><span class="stat-dot waiting"></span><span id="waiting-count">0</span> waiting</div>
+      <div class="stat"><span class="stat-dot stopped"></span><span id="stopped-count">0</span> stopped</div>
+    </div>
+    <div>
+      <div class="connection-status">
+        <span class="connection-dot" id="connection-dot"></span>
+        <span id="connection-text">Connecting...</span>
+      </div>
+      <div class="last-update" id="last-update"></div>
+    </div>
+  </div>
+
+  <div id="content">
+    <div class="empty-state">
+      <div class="icon">🖥️</div>
+      <p>Waiting for agents to connect...</p>
+      <p style="font-size:12px">Run <code style="background:#222;padding:2px 6px;border-radius:4px">ccm agent --server &lt;url&gt; --token &lt;token&gt;</code> on each machine</p>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${location.host}?role=dashboard&token=${token}`;
+
+    let ws;
+    let reconnectTimer;
+
+    function connect() {
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        document.getElementById('connection-dot').className = 'connection-dot connected';
+        document.getElementById('connection-text').textContent = 'Connected';
+      };
+      ws.onclose = () => {
+        document.getElementById('connection-dot').className = 'connection-dot disconnected';
+        document.getElementById('connection-text').textContent = 'Disconnected';
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+      ws.onerror = () => {};
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'aggregator_sessions') {
+            renderDashboard(msg.data);
+          }
+        } catch {}
+      };
+    }
+
+    function abbreviatePath(path) {
+      if (!path) return '(unknown)';
+      return path.replace(/^\/Users\/[^/]+/, '~');
+    }
+
+    function formatRelativeTime(isoString) {
+      if (!isoString) return '';
+      const diff = Date.now() - new Date(isoString).getTime();
+      const secs = Math.floor(diff / 1000);
+      if (secs < 60) return `${secs}s ago`;
+      const mins = Math.floor(secs / 60);
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      return `${hrs}h ago`;
+    }
+
+    function statusLabel(status) {
+      const labels = { running: 'Running', waiting_input: 'Waiting', stopped: 'Stopped' };
+      return labels[status] || status;
+    }
+
+    function renderDashboard(data) {
+      const { machines, total_sessions } = data;
+      const machineIds = Object.keys(machines);
+
+      // Update stats
+      let running = 0, waiting = 0, stopped = 0;
+      for (const m of Object.values(machines)) {
+        for (const s of m.sessions) {
+          if (s.status === 'running') running++;
+          else if (s.status === 'waiting_input') waiting++;
+          else stopped++;
+        }
+      }
+      document.getElementById('machine-count').textContent = machineIds.length;
+      document.getElementById('running-count').textContent = running;
+      document.getElementById('waiting-count').textContent = waiting;
+      document.getElementById('stopped-count').textContent = stopped;
+      document.getElementById('last-update').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+
+      if (machineIds.length === 0) {
+        document.getElementById('content').innerHTML = `
+          <div class="empty-state">
+            <div class="icon">🖥️</div>
+            <p>Waiting for agents to connect...</p>
+          </div>`;
+        return;
+      }
+
+      let html = '<div class="machines-grid">';
+      for (const id of machineIds) {
+        const machine = machines[id];
+        const name = machine.machine_name || id;
+        const sessions = machine.sessions || [];
+
+        html += `<div class="machine-card">`;
+        html += `<div class="machine-header">`;
+        html += `<div class="machine-name"><span class="icon">🖥️</span>${escapeHtml(name)}</div>`;
+        html += `<span class="machine-badge">${sessions.length} session${sessions.length !== 1 ? 's' : ''}</span>`;
+        html += `</div>`;
+        html += `<div class="machine-sessions">`;
+
+        if (sessions.length === 0) {
+          html += `<div class="no-sessions">No active sessions</div>`;
+        } else {
+          for (const s of sessions) {
+            html += `<div class="session-card">`;
+            html += `<div class="session-status ${s.status}"></div>`;
+            html += `<div class="session-info">`;
+            html += `<div class="session-cwd">${escapeHtml(abbreviatePath(s.cwd))}</div>`;
+            html += `<div class="session-meta">${formatRelativeTime(s.updated_at)}</div>`;
+            if (s.lastMessage) {
+              html += `<div class="session-message">${escapeHtml(s.lastMessage.substring(0, 120))}</div>`;
+            }
+            html += `</div>`;
+            html += `<span class="session-status-label ${s.status}">${statusLabel(s.status)}</span>`;
+            html += `</div>`;
+          }
+        }
+
+        html += `</div></div>`;
+      }
+      html += '</div>';
+
+      document.getElementById('content').innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    connect();
+
+    // Auto-refresh relative times every 10s
+    setInterval(() => {
+      // Re-render timestamps by re-requesting from WS
+      // Times will update on next WS message
+    }, 10000);
+  </script>
+</body>
+</html>

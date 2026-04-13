@@ -3,6 +3,8 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { render } from 'ink';
+import { startAgentClient } from '../aggregator/agent-client.js';
+import { startAggregator } from '../aggregator/server.js';
 import { Dashboard } from '../components/Dashboard.js';
 import { handleHookEvent } from '../hook/handler.js';
 import { startServer } from '../server/index.js';
@@ -157,6 +159,53 @@ program
   .action(async (options: { port: string; tailscale?: boolean }) => {
     const port = parseInt(options.port, 10);
     await startServer({ port, preferTailscale: options.tailscale });
+  });
+
+program
+  .command('aggregator')
+  .alias('agg')
+  .description('Start multi-machine aggregator server')
+  .option('-p, --port <port>', 'Port number', '3460')
+  .option('-H, --host <host>', 'Host to bind to', '0.0.0.0')
+  .option('--agent-token <token>', 'Pre-set agent token (auto-generated if omitted)')
+  .action(async (options: { port: string; host: string; agentToken?: string }) => {
+    const info = await startAggregator({
+      port: parseInt(options.port, 10),
+      host: options.host,
+      agentToken: options.agentToken,
+    });
+
+    const shutdown = () => {
+      console.log('\n  Shutting down aggregator...');
+      info.stop();
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  });
+
+program
+  .command('agent')
+  .description('Run as agent, pushing local sessions to an aggregator server')
+  .requiredOption('-s, --server <url>', 'Aggregator server URL (e.g., http://host:3460)')
+  .requiredOption('-t, --token <token>', 'Agent token from aggregator')
+  .option('-n, --name <name>', 'Machine display name')
+  .option('--id <id>', 'Machine ID (defaults to hostname)')
+  .action((options: { server: string; token: string; name?: string; id?: string }) => {
+    const client = startAgentClient({
+      serverUrl: options.server,
+      agentToken: options.token,
+      machineName: options.name,
+      machineId: options.id,
+    });
+
+    const shutdown = () => {
+      console.log('\n  Stopping agent...');
+      client.stop();
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
   });
 
 /**
