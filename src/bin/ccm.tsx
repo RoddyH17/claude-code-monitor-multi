@@ -164,15 +164,17 @@ program
 program
   .command('aggregator')
   .alias('agg')
-  .description('Start multi-machine aggregator server')
+  .description('Start multi-machine aggregator server (tokens persist across restarts)')
   .option('-p, --port <port>', 'Port number', '3460')
   .option('-H, --host <host>', 'Host to bind to', '0.0.0.0')
-  .option('--agent-token <token>', 'Pre-set agent token (auto-generated if omitted)')
-  .action(async (options: { port: string; host: string; agentToken?: string }) => {
+  .option('--agent-token <token>', 'Override agent token (not persisted)')
+  .option('--reset-tokens', 'Regenerate and persist fresh tokens, discarding old ones')
+  .action(async (options: { port: string; host: string; agentToken?: string; resetTokens?: boolean }) => {
     const info = await startAggregator({
       port: parseInt(options.port, 10),
       host: options.host,
       agentToken: options.agentToken,
+      resetTokens: options.resetTokens,
     });
 
     const shutdown = () => {

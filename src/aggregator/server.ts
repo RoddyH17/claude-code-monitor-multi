@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { hostname } from 'node:os';
@@ -6,6 +5,7 @@ import { dirname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type WebSocket, WebSocketServer } from 'ws';
 import type { AgentUpdate, AggregatorStore, Session } from '../types/index.js';
+import { loadOrCreateTokens, resetTokens } from './token-store.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STALE_MACHINE_MS = 5 * 60 * 1000; // 5 minutes without heartbeat = stale
@@ -105,10 +105,6 @@ interface DashboardBroadcast {
   };
 }
 
-function generateAuthToken(): string {
-  return randomBytes(32).toString('hex');
-}
-
 function broadcastToDashboards(wss: WebSocketServer, dashboardClients: Set<WebSocket>): void {
   pruneStale();
   const message: DashboardBroadcast = {
@@ -172,7 +168,12 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, validToken: stri
 export interface AggregatorOptions {
   port?: number;
   host?: string;
+  /** Override agent token (disables persistence) */
   agentToken?: string;
+  /** Override dashboard token (disables persistence) */
+  dashboardToken?: string;
+  /** Force regenerate tokens even if a persisted pair exists */
+  resetTokens?: boolean;
 }
 
 export interface AggregatorServerInfo {
@@ -192,8 +193,26 @@ export interface AggregatorServerInfo {
 export async function startAggregator(options: AggregatorOptions = {}): Promise<AggregatorServerInfo> {
   const port = options.port ?? 3460;
   const host = options.host ?? '0.0.0.0';
-  const agentToken = options.agentToken ?? generateAuthToken();
-  const dashboardToken = generateAuthToken();
+
+  // Token strategy:
+  // - If either override is provided, use them (no persistence)
+  // - Else if resetTokens, regenerate + persist
+  // - Else load from disk, or generate + persist if none exist
+  let agentToken: string;
+  let dashboardToken: string;
+  if (options.agentToken || options.dashboardToken) {
+    const persisted = loadOrCreateTokens();
+    agentToken = options.agentToken ?? persisted.agentToken;
+    dashboardToken = options.dashboardToken ?? persisted.dashboardToken;
+  } else if (options.resetTokens) {
+    const fresh = resetTokens();
+    agentToken = fresh.agentToken;
+    dashboardToken = fresh.dashboardToken;
+  } else {
+    const tokens = loadOrCreateTokens();
+    agentToken = tokens.agentToken;
+    dashboardToken = tokens.dashboardToken;
+  }
 
   const dashboardClients = new Set<WebSocket>();
 
